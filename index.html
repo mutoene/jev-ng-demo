@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>jevで爆速NGワード判定をしよう</title>
+    <meta name="description" content="入力した文章に不適切な表現が含まれているかを、TypeSafe の判定モデル jev で判定する体験ページ。" />
+    <style>
+      :root {
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --panel-2: #f1f3f6;
+        --line: #e3e6eb;
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #2563eb;
+        --accent-ink: #ffffff;
+        --allow: #15803d;
+        --allow-bg: #e8f5ec;
+        --block: #dc2626;
+        --block-bg: #fdecec;
+        --bar: #c7ccd4;
+        --marker: #111827;
+        --radius: 12px;
+        color-scheme: light;
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+        line-height: 1.7;
+      }
+      a { color: var(--accent); }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 40px 16px 72px; }
+      header h1 { font-size: clamp(22px, 4vw, 30px); margin: 0 0 6px; letter-spacing: 0.01em; line-height: 1.35; }
+      header p { margin: 0; color: var(--muted); font-size: 14.5px; }
+      .notice {
+        margin: 20px 0 28px; padding: 12px 16px; border-radius: var(--radius);
+        background: var(--panel-2); font-size: 13px; color: var(--muted);
+      }
+      .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+      @media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card h2 { font-size: 13px; color: var(--muted); margin: 0 0 12px; font-weight: 700; letter-spacing: 0.04em; }
+      textarea {
+        width: 100%; min-height: 150px; resize: vertical;
+        background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+        border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 15px; line-height: 1.7;
+      }
+      textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+      .under { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+      .counter { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .counter.over { color: var(--block); font-weight: 600; }
+      .primary {
+        background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 9px;
+        padding: 10px 22px; font: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer;
+      }
+      .primary:disabled { opacity: .5; cursor: progress; }
+      .kbd { font-size: 11.5px; color: var(--muted); margin-right: 8px; }
+      .placeholder { color: var(--muted); font-size: 14px; padding: 28px 4px; text-align: center; }
+      .verdict { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 10px; }
+      .verdict.allow { background: var(--allow-bg); }
+      .verdict.block { background: var(--block-bg); }
+      .verdict.error { background: var(--panel-2); }
+      .badge { font-weight: 800; letter-spacing: .08em; font-size: 15px; padding: 5px 12px; border-radius: 7px; color: var(--panel); white-space: nowrap; }
+      .allow .badge { background: var(--allow); }
+      .block .badge { background: var(--block); }
+      .error .badge { background: var(--muted); }
+      .verdict p { margin: 0; font-size: 13.5px; }
+      .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 2px 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .rows { margin-top: 4px; }
+      .row { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 3.2em; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
+      .row .name { line-height: 1.35; }
+      .row .name small { display: block; color: var(--muted); font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .row.hit .name { color: var(--block); font-weight: 700; }
+      .row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+      .row.hit .num { color: var(--block); font-weight: 700; }
+      .track { position: relative; height: 10px; background: var(--panel-2); border-radius: 999px; }
+      .track > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bar); border-radius: 999px; }
+      .row.hit .track > i { background: var(--block); }
+      .track > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--marker); border-radius: 1px; }
+      .legend { font-size: 11.5px; color: var(--muted); margin: 8px 2px 0; }
+      .legend b { display: inline-block; width: 2px; height: 10px; background: var(--marker); vertical-align: -1px; margin: 0 4px 0 2px; }
+      .subhead { font-size: 12px; color: var(--muted); margin: 18px 0 2px; font-weight: 600; }
+      details { margin-top: 16px; }
+      summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+      pre { background: var(--panel-2); border-radius: 8px; padding: 12px; overflow: auto; font-size: 11.5px; max-height: 360px; margin: 8px 0 0; }
+      section.how { margin-top: 36px; }
+      section.how h2 { font-size: 18px; margin: 0 0 10px; }
+      .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      @media (max-width: 720px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+      .step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; font-size: 13.5px; }
+      .step h3 { margin: 0 0 4px; font-size: 14px; }
+      .step p { margin: 0; color: var(--muted); }
+      footer { margin-top: 36px; font-size: 12px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>jevで爆速NGワード判定をしよう</h1>
+        <p>
+          入力した文章に不適切な表現が含まれているかを、TypeSafe の判定モデル jev で判定します。<br />
+          単語の一覧と照らし合わせるのではなく、「暴言か」「脅迫か」「個人を特定できるか」といった12個の質問で、文の中で誰に何が向いているかを見ています。
+          <span id="article-link" hidden><br />仕組みは <a href="#">解説記事</a> にまとめています。</span>
+        </p>
+      </header>
+
+      <div class="notice">
+        判定のために文章は TypeSafe の API へ送信されます。実在の人の名前・連絡先・住所などは入力しないでください。
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>入力</h2>
+          <textarea id="text" aria-label="判定する文章" placeholder="判定したい文章を入力してください（140文字まで）">殺人的な暑さで溶けそう。アイス食べたい</textarea>
+          <div class="under">
+            <span class="counter" id="counter"></span>
+            <span>
+              <span class="kbd">Ctrl+Enter でも判定</span>
+              <button class="primary" id="run" type="button">判定する</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="card" aria-live="polite">
+          <h2>判定結果</h2>
+          <div id="result"><p class="placeholder">文章を入力して「判定する」を押すと、ここに項目ごとのスコアが出ます。</p></div>
+        </div>
+      </div>
+
+      <section class="how">
+        <h2>判定の流れ</h2>
+        <div class="steps">
+          <div class="step">
+            <h3>1. 入力を整える</h3>
+            <p>全角・半角の揺れをそろえ、見えない文字を取り除きます。見えない文字を挟んだ伏せ字は、ここで元の語に戻ります。</p>
+          </div>
+          <div class="step">
+            <h3>2. 13問をまとめて聞く</h3>
+            <p>「暴言か」「脅迫か」などの「はい/いいえ」で答える質問12個と、全体の不適切度（0〜3）を1回のリクエストで jev に送ります。jev は全問を並列に評価します。</p>
+          </div>
+          <div class="step">
+            <h3>3. しきい値で二値にする</h3>
+            <p>どれか1項目でもしきい値を超えるか、不適切度が 1.5 以上なら block です。</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        判定は自動で行われ、誤ることがあります。表示されるスコアは jev が返した「はい」の確率です。
+        入力した文章と判定結果は、判定の精度を改善するために保存します。
+        1分あたり10回、全体で1日あたりの回数に上限があります。
+      </footer>
+    </div>
+
+    <script>
+      const ARTICLE_URL = '';
+      const MAX_CHARS = 140;
+      const API_BASE = 'https://jev-ng-demo.liminality.workers.dev';
+
+      const $ = (id) => document.getElementById(id);
+      const state = { config: null, busy: false };
+
+      if (ARTICLE_URL) {
+        const link = $('article-link');
+        link.querySelector('a').href = ARTICLE_URL;
+        link.hidden = false;
+      }
+
+      const escapeHtml = (s) =>
+        String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+      function updateCounter() {
+        const length = [...$('text').value].length;
+        const counter = $('counter');
+        counter.textContent = `${length} / ${MAX_CHARS} 文字`;
+        counter.classList.toggle('over', length > MAX_CHARS);
+      }
+
+      function effectiveThresholds(result) {
+        const { hazards, minEffectiveThreshold } = state.config;
+        const preset = state.config.presets.find((p) => p.id === result.preset);
+        const tightened = {};
+        for (const hazard of hazards) {
+          if (!hazard.modifier) continue;
+          if (!result.reasons.includes(`modifier:${hazard.id}`)) continue;
+          for (const target of hazard.modifier.targets) {
+            tightened[target] = (tightened[target] ?? 0) + hazard.modifier.tighten;
+          }
+        }
+        const out = {};
+        for (const hazard of hazards) {
+          if (hazard.threshold === null) continue;
+          const shift = preset.shiftExempt.includes(hazard.id) ? 0 : preset.thresholdShift;
+          out[hazard.id] = Math.max(hazard.threshold + shift - (tightened[hazard.id] ?? 0), minEffectiveThreshold);
+        }
+        return { out, severity: preset.severityThreshold + preset.thresholdShift, tightened };
+      }
+
+      function bar(value, max, marker) {
+        const pct = Math.max(0, Math.min(1, value / max)) * 100;
+        const m = Math.max(0, Math.min(1, marker / max)) * 100;
+        return `<div class="track"><i style="width:${pct.toFixed(1)}%"></i><b style="left:calc(${m.toFixed(1)}% - 1px)"></b></div>`;
+      }
+
+      function renderResult(result) {
+        const { out: eff, severity: sevThreshold, tightened } = effectiveThresholds(result);
+        const hazards = state.config.hazards;
+        const label = (id) => hazards.find((h) => h.id === id)?.label ?? id;
+
+        const scored = Object.keys(eff)
+          .filter((id) => typeof result.scores[id] === 'number')
+          .map((id) => ({ id, value: result.scores[id], eff: eff[id], hit: result.scores[id] >= eff[id] }))
+          .sort((a, b) => b.value / b.eff - a.value / a.eff);
+
+        const signals = hazards.filter((h) => h.threshold === null && typeof result.scores[h.id] === 'number');
+
+        const message = result.allowed ? 'どの項目もしきい値を下回りました。' : result.message;
+
+        let html = `
+          <div class="verdict ${result.verdict}">
+            <span class="badge">${result.allowed ? 'ALLOW' : 'BLOCK'}</span>
+            <p>${escapeHtml(message)}</p>
+          </div>
+          <div class="stats">
+            <span>${result.latencyMs} ms${result.cached ? '（キャッシュ）' : ''}</span>
+            <span>入力 ${result.usage?.input_tokens?.toLocaleString() ?? '—'} トークン</span>
+            <span>${escapeHtml(result.model)}</span>
+          </div>`;
+
+        if (result.severity) {
+          const sevHit = result.severity.value >= sevThreshold;
+          html += `
+            <div class="subhead">全体の不適切度（0〜3）</div>
+            <div class="rows">
+              <div class="row ${sevHit ? 'hit' : ''}">
+                <div class="name">不適切度<small>severity</small></div>
+                ${bar(result.severity.value, 3, sevThreshold)}
+                <div class="num">${result.severity.value.toFixed(2)}</div>
+              </div>
+            </div>`;
+        }
+
+        html += `<div class="subhead">項目ごとの「はい」の確率</div><div class="rows">`;
+        for (const row of scored) {
+          const note = tightened[row.id] ? '（未成年が関係するため厳しく）' : '';
+          html += `
+            <div class="row ${row.hit ? 'hit' : ''}">
+              <div class="name">${escapeHtml(label(row.id))}${escapeHtml(note)}<small>${row.id}</small></div>
+              ${bar(row.value, 1, row.eff)}
+              <div class="num">${row.value.toFixed(2)}</div>
+            </div>`;
+        }
+        for (const signal of signals) {
+          html += `
+            <div class="row">
+              <div class="name">${escapeHtml(signal.label)}<small>${signal.id}・単独では止めない</small></div>
+              ${bar(result.scores[signal.id], 1, signal.modifier.fires)}
+              <div class="num">${result.scores[signal.id].toFixed(2)}</div>
+            </div>`;
+        }
+        html += `</div>
+          <p class="legend"><b></b>はしきい値。バーが線を越えた項目が block の理由です。</p>
+          <details><summary>Worker の生のレスポンス</summary><pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre></details>`;
+
+        $('result').innerHTML = html;
+      }
+
+      function renderError(title, detail) {
+        $('result').innerHTML = `
+          <div class="verdict error"><span class="badge">ERROR</span><p>${escapeHtml(title)}</p></div>
+          ${detail ? `<p class="legend">${escapeHtml(detail)}</p>` : ''}`;
+      }
+
+      async function run() {
+        if (state.busy || !state.config) return;
+        const text = $('text').value;
+        if (!text.trim()) {
+          renderError('文章を入力してください。');
+          return;
+        }
+        if ([...text].length > MAX_CHARS) {
+          renderError(`${MAX_CHARS}文字以内で入力してください。`);
+          return;
+        }
+
+        state.busy = true;
+        $('run').disabled = true;
+        $('run').textContent = '判定中…';
+        try {
+          const response = await fetch(`${API_BASE}/v1/moderate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+          const body = await response.json();
+          if (!body.ok) {
+            renderError(body.error?.message ?? '判定できませんでした。', `${response.status} ${body.error?.code ?? ''}`);
+          } else {
+            renderResult(body);
+          }
+        } catch (error) {
+          renderError('通信に失敗しました。時間をおいて再度お試しください。', String(error));
+        } finally {
+          state.busy = false;
+          $('run').disabled = false;
+          $('run').textContent = '判定する';
+        }
+      }
+
+      $('text').addEventListener('input', updateCounter);
+      $('text').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) run();
+      });
+      $('run').addEventListener('click', run);
+      updateCounter();
+
+      fetch(`${API_BASE}/v1/config`)
+        .then((response) => response.json())
+        .then((config) => { state.config = config; })
+        .catch((error) => renderError('設定を読み込めませんでした。', String(error)));
+    </script>
+  </body>
+</html>
